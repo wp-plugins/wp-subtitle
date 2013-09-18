@@ -1,4 +1,4 @@
-<?
+<?php
 
 /*
 Plugin Name: WP Subtitle
@@ -6,7 +6,7 @@ Plugin URI: http://wordpress.org/plugins/wp-subtitle/
 Description: Adds a subtitle field to pages and posts. Possible to add support for custom post types.
 Author: Husani Oakley, Ben Huson
 Author URI: https://github.com/benhuson/wp-subtitle
-Version: 2.0
+Version: 2.0.1
 License: GPLv2
 */
 
@@ -111,28 +111,61 @@ class WPSubtitle {
 			return;
 
 		// Verify nonce
-		if ( isset( $_POST['wps_noncename'] ) && ! wp_verify_nonce( $_POST['wps_noncename'], 'wp-subtitle' ) )
-			return $post_id;
+		if ( ! WPSubtitle::_verify_posted_nonce( 'wps_noncename', 'wp-subtitle' ) )
+			return;
 
 		// Check edit capability
+		if ( ! WPSubtitle::_verify_post_edit_capability( $post_id ) )
+			return;
+	
+		// Save data
+		if ( isset( $_POST['wps_subtitle'] ) )
+			update_post_meta( $post_id, 'wps_subtitle', $_POST['wps_subtitle'] );
+	}
+
+	/**
+	 * Verify Post Edit Capability
+	 *
+	 * @since  2.0.1
+	 * @internal
+	 *
+	 * @param   int  $post_id  Post ID.
+	 * @return  bool
+	 */
+	function _verify_post_edit_capability( $post_id ) {
 		$abort = true;
 		$post_types = WPSubtitle::get_supported_post_types();
 		$post_types_obj = (array) get_post_types( array(
 			'_builtin' => false
 		), 'objects' );
+
+		// Check supported post type
 		if ( isset( $_POST['post_type'] ) && in_array( $_POST['post_type'], $post_types ) ) {
 			if ( 'page' == $_POST['post_type'] && current_user_can( 'edit_page', $post_id ) )
-				$abort = false;
+				return true;
 			elseif ( 'post' == $_POST['post_type'] && current_user_can( 'edit_post', $post_id ) )
-				$abort = false;
+				return true;
 			elseif ( current_user_can( $post_types_obj[$_POST['post_type']]->cap->edit_post, $post_id ) )
-				$abort = false;
+				return true;
 		}
-		if ( $abort )
-			return $post_id;
-	
-		// Save data
-		update_post_meta( $post_id, 'wps_subtitle', $_POST['wps_subtitle'] );
+
+		return false;
+	}
+
+	/**
+	 * Verify Posted Nonce
+	 *
+	 * @since  2.0.1
+	 * @internal
+	 *
+	 * @param   string  $nonce   Posted nonce name.
+	 * @param   string  $action  Nonce action.
+	 * @return  bool
+	 */
+	function _verify_posted_nonce( $nonce, $action ) {
+		if ( isset( $_POST[$nonce] ) && wp_verify_nonce( $_POST[$nonce], $action ) )
+			return true;
+		return false;
 	}
 
 	/**
