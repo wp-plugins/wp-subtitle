@@ -5,14 +5,81 @@
  * @subpackage  Admin
  */
 
-// Language
-load_plugin_textdomain( 'wp-subtitle', false, dirname( WPSUBTITLE_BASENAME ) . '/languages' );
-
-// Includes
-add_action( 'add_meta_boxes', array( 'WPSubtitle_Admin', '_add_meta_boxes' ) );
-add_action( 'save_post', array( 'WPSubtitle_Admin', '_save_post' ) );
+add_action( 'plugins_loaded', array( 'WPSubtitle_Admin', '_setup' ) );
 
 class WPSubtitle_Admin {
+
+	/**
+	 * Setup
+	 *
+	 * @since  2.2
+	 * @internal
+	 */
+	static function _setup() {
+
+		// Language
+		load_plugin_textdomain( 'wp-subtitle', false, dirname( WPSUBTITLE_BASENAME ) . '/languages' );
+
+		// Setup Field / Meta Box
+		$post_type = isset( $_GET['post'] ) ? get_post_type( $_GET['post'] ) : '';
+		if ( WPSubtitle_Admin::edit_form_after_title_supported( $post_type ) ) {
+			add_action( 'admin_head', array( 'WPSubtitle_Admin', '_add_admin_styles' ) );
+			add_action( 'edit_form_after_title', array( 'WPSubtitle_Admin', '_add_subtitle_field' ) );
+		} else {
+			add_action( 'add_meta_boxes', array( 'WPSubtitle_Admin', '_add_meta_boxes' ) );
+		}
+
+		add_action( 'save_post', array( 'WPSubtitle_Admin', '_save_post' ) );
+	}
+
+	/**
+	 * Add Admin Styles
+	 *
+	 * @since  2.2
+	 * @internal
+	 */
+	static function _add_admin_styles() {
+		?>
+		<style>
+		#subtitlediv.top {
+			margin-bottom: 15px;
+			position: relative;
+		}
+		#subtitlediv.top #subtitlewrap {
+			border: 0;
+			padding: 0;
+		}
+		#subtitlediv.top #wpsubtitle {
+			background-color: #fff;
+			font-size: 1.4em;
+			line-height: 1em;
+			margin: 0;
+			outline: 0;
+			padding: 3px 8px;
+			width: 100%;
+			height: 1.7em;
+		}
+		#subtitlediv.top #wpsubtitle::-webkit-input-placeholder { padding-top: 3px; }
+		#subtitlediv.top #wpsubtitle:-moz-placeholder { padding-top: 3px; }
+		#subtitlediv.top #wpsubtitle::-moz-placeholder { padding-top: 3px; }
+		#subtitlediv.top #wpsubtitle:-ms-input-placeholder { padding-top: 3px; }
+		#subtitlediv.top #subtitledescription {
+			margin: 5px 10px 0 10px;
+		}
+		</style>
+		<?php
+	}
+
+	/**
+	 * Get Meta Box Title
+	 *
+	 * @since  2.2
+	 *
+	 * @uses  apply_filters( 'wps_meta_box_title' )
+	 */
+	static function get_meta_box_title( $post_type ) {
+		return apply_filters( 'wps_meta_box_title', __( 'Subtitle', 'wp-subtitle' ), $post_type );
+	}
 
 	/**
 	 * Add Meta Boxes
@@ -27,8 +94,7 @@ class WPSubtitle_Admin {
 	static function _add_meta_boxes() {
 		$post_types = WPSubtitle::get_supported_post_types();
 		foreach ( $post_types as $post_type ) {
-			$meta_box_title = apply_filters( 'wps_meta_box_title', __( 'Subtitle', 'wp-subtitle' ), $post_type );
-			add_meta_box( 'wps_subtitle_panel', __( $meta_box_title ), array( 'WPSubtitle_Admin', '_add_subtitle_meta_box' ), $post_type, 'normal', 'high' );
+			add_meta_box( 'wps_subtitle_panel',  WPSubtitle_Admin::get_meta_box_title( $post_type ), array( 'WPSubtitle_Admin', '_add_subtitle_meta_box' ), $post_type, 'normal', 'high' );
 		}
 	}
 
@@ -46,6 +112,31 @@ class WPSubtitle_Admin {
 		echo '<input type="hidden" name="wps_noncename" id="wps_noncename" value="' . wp_create_nonce( 'wp-subtitle' ) . '" />';
 		echo '<input type="text" id="wpsubtitle" name="wps_subtitle" value="' . WPSubtitle::_get_post_meta( $post->ID ) . '" style="width:99%;" />';
 		echo apply_filters( 'wps_subtitle_field_description', '', $post );
+	}
+
+	/**
+	 * Add Subtitle Field
+	 *
+	 * @since  2.2
+	 * @internal
+	 *
+	 * @uses  WPSubtitle::_get_post_meta()
+	 * @uses  apply_filters( 'wps_subtitle_field_description' )
+	 */
+	static function _add_subtitle_field() {
+		global $post;
+		echo '<input type="hidden" name="wps_noncename" id="wps_noncename" value="' . wp_create_nonce( 'wp-subtitle' ) . '" />';
+		echo '<div id="subtitlediv" class="top">';
+			echo '<div id="subtitlewrap">';
+				echo '<input type="text" id="wpsubtitle" name="wps_subtitle" value="' . WPSubtitle::_get_post_meta( $post->ID ) . '" autocomplete="off" placeholder="' . esc_attr( apply_filters( 'wps_subtitle_field_placeholder', __( 'Enter subtitle here', 'wp-subtitle' ) ) ) . '" />';
+			echo '</div>';
+
+		// Description
+		$description = apply_filters( 'wps_subtitle_field_description', '', $post );
+		if ( ! empty( $description ) ) {
+			echo '<div id="subtitledescription">' . $description . '</div>';
+		}
+		echo '</div>';
 	}
 
 	/**
@@ -127,6 +218,23 @@ class WPSubtitle_Admin {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * edit_form_after_title Supported
+	 *
+	 * @since  2.2
+	 *
+	 * @param   string  $post_type  Post type.
+	 * @return  bool
+	 */
+	static function edit_form_after_title_supported( $post_type = '' ) {
+		global $wp_version;
+
+		if ( version_compare( $wp_version, '3.5', '<' ) ) {
+			return false;
+		}
+		return ! apply_filters( 'wps_subtitle_use_meta_box', false, $post_type );
 	}
 
 }
