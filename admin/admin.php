@@ -20,16 +20,30 @@ class WPSubtitle_Admin {
 		// Language
 		load_plugin_textdomain( 'wp-subtitle', false, dirname( WPSUBTITLE_BASENAME ) . '/languages' );
 
-		// Setup Field / Meta Box
+		add_action( 'admin_init', array( 'WPSubtitle_Admin', '_admin_init' ) );
+		add_action( 'save_post', array( 'WPSubtitle_Admin', '_save_post' ) );
+	}
+
+	/**
+	 * Admin Init
+	 *
+	 * @since  2.3
+	 * @internal
+	 */
+	static function _admin_init() {
+
 		$post_type = isset( $_GET['post'] ) ? get_post_type( $_GET['post'] ) : '';
-		if ( WPSubtitle_Admin::edit_form_after_title_supported( $post_type ) ) {
-			add_action( 'admin_head', array( 'WPSubtitle_Admin', '_add_admin_styles' ) );
-			add_action( 'edit_form_after_title', array( 'WPSubtitle_Admin', '_add_subtitle_field' ) );
-		} else {
-			add_action( 'add_meta_boxes', array( 'WPSubtitle_Admin', '_add_meta_boxes' ) );
+
+		// Setup Field / Meta Box
+		if ( WPSubtitle::is_supported_post_type( $post_type ) ) {
+			if ( WPSubtitle_Admin::edit_form_after_title_supported( $post_type ) ) {
+				add_action( 'admin_head', array( 'WPSubtitle_Admin', '_add_admin_styles' ) );
+				add_action( 'edit_form_after_title', array( 'WPSubtitle_Admin', '_add_subtitle_field' ) );
+			} else {
+				add_action( 'add_meta_boxes', array( 'WPSubtitle_Admin', '_add_meta_boxes' ) );
+			}
 		}
 
-		add_action( 'save_post', array( 'WPSubtitle_Admin', '_save_post' ) );
 	}
 
 	/**
@@ -110,7 +124,7 @@ class WPSubtitle_Admin {
 	static function _add_subtitle_meta_box() {
 		global $post;
 		echo '<input type="hidden" name="wps_noncename" id="wps_noncename" value="' . wp_create_nonce( 'wp-subtitle' ) . '" />';
-		echo '<input type="text" id="wpsubtitle" name="wps_subtitle" value="' . WPSubtitle::_get_post_meta( $post->ID ) . '" style="width:99%;" />';
+		echo '<input type="text" id="wpsubtitle" name="wps_subtitle" value="' . esc_attr( WPSubtitle::_get_post_meta( $post->ID ) ) . '" style="width:99%;" />';
 		echo apply_filters( 'wps_subtitle_field_description', '', $post );
 	}
 
@@ -128,7 +142,7 @@ class WPSubtitle_Admin {
 		echo '<input type="hidden" name="wps_noncename" id="wps_noncename" value="' . wp_create_nonce( 'wp-subtitle' ) . '" />';
 		echo '<div id="subtitlediv" class="top">';
 			echo '<div id="subtitlewrap">';
-				echo '<input type="text" id="wpsubtitle" name="wps_subtitle" value="' . WPSubtitle::_get_post_meta( $post->ID ) . '" autocomplete="off" placeholder="' . esc_attr( apply_filters( 'wps_subtitle_field_placeholder', __( 'Enter subtitle here', 'wp-subtitle' ) ) ) . '" />';
+				echo '<input type="text" id="wpsubtitle" name="wps_subtitle" value="' . esc_attr( WPSubtitle::_get_post_meta( $post->ID ) ) . '" autocomplete="off" placeholder="' . esc_attr( apply_filters( 'wps_subtitle_field_placeholder', __( 'Enter subtitle here', 'wp-subtitle' ) ) ) . '" />';
 			echo '</div>';
 
 		// Description
@@ -183,14 +197,13 @@ class WPSubtitle_Admin {
 	 * @return  bool
 	 */
 	static function _verify_post_edit_capability( $post_id ) {
-		$abort = true;
-		$post_types = WPSubtitle::get_supported_post_types();
+
 		$post_types_obj = (array) get_post_types( array(
 			'_builtin' => false
 		), 'objects' );
 
 		// Check supported post type
-		if ( isset( $_POST['post_type'] ) && in_array( $_POST['post_type'], $post_types ) ) {
+		if ( isset( $_POST['post_type'] ) && WPSubtitle::is_supported_post_type( $_POST['post_type'] ) ) {
 			if ( 'page' == $_POST['post_type'] && current_user_can( 'edit_page', $post_id ) ) {
 				return true;
 			} elseif ( 'post' == $_POST['post_type'] && current_user_can( 'edit_post', $post_id ) ) {
